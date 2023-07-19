@@ -1,0 +1,47 @@
+version: "3"
+services:
+  postgre:
+    image: postgres:latest
+    volumes:
+      - reports-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order-and-pay-app
+
+
+  migrate:
+    image: migrate/migrate:v4.15.2
+    volumes:
+      - ./migrations:/migrations
+    entrypoint:
+      [
+        "migrate",
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgre:5432/${POSTGRES_DB}?sslmode=disable",
+      ]
+    command: ["up"]
+    depends_on:
+      postgre:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - order-and-pay-app
+
+volumes:
+  reports-db-data:
+
+networks:
+  order-and-pay-app:
+    name: "order-and-pay-app"
