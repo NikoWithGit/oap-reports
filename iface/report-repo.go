@@ -1,5 +1,11 @@
 package iface
 
+import (
+	"oap-reposts/model"
+	"time"
+)
+
 type ReportRepo interface {
-	AddReport(report string) error
+	AddOrder(order *model.Order) error
+	GetAll(from time.Time, to time.Time) ([]model.Order, error)
 }

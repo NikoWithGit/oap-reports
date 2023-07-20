@@ -1,66 +1,57 @@
 package consumer
 
 import (
+	"encoding/json"
 	"oap-reposts/iface"
-	"os"
-	"os/signal"
-	"syscall"
+	"oap-reposts/model"
 
 	"github.com/IBM/sarama"
 )
 
 type KafkaConsumer struct {
 	sarama.Consumer
-	reportRepo iface.ReportRepo
-	logger     iface.Ilogger
+	rs     iface.ReportService
+	logger iface.Ilogger
 }
 
-func NewKafkaConsumer(brokersUrl []string, rr iface.ReportRepo, l iface.Ilogger) (*KafkaConsumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-
+func NewKafkaConsumer(brokersUrl []string, rs iface.ReportService, l iface.Ilogger) (*KafkaConsumer, error) {
+	config := getConfig()
 	consumer, err := sarama.NewConsumer(brokersUrl, config)
 	if err != nil {
 		return nil, err
 	}
-	return &KafkaConsumer{consumer, rr, l}, nil
+	return &KafkaConsumer{consumer, rs, l}, nil
 }
 
-func (kConsumer *KafkaConsumer) ListenTopic(topic string) {
-	consumer, err := kConsumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
+func getConfig() *sarama.Config {
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
+	return config
+}
+
+func (kc *KafkaConsumer) ListenTopic(topic string) error {
+	consumer, err := kc.ConsumePartition(topic, 0, sarama.OffsetNewest)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	kConsumer.logger.Info("Consumer started")
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-	msgCount := 0
+	kc.logger.Info("Consumer started")
 
-	doneCh := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case err = <-consumer.Errors():
-				kConsumer.logger.Error(err.Error())
-			case msg := <-consumer.Messages():
-				msgCount++
-				message := string(msg.Value)
-				err = kConsumer.reportRepo.AddReport(message)
-				if err != nil {
-					kConsumer.logger.Error(err.Error())
-				}
-				kConsumer.logger.Infof("Received message Count %d: | Topic(%s) | Message(%s) \n", msgCount, msg.Topic, message)
-			case <-sigchan:
-				kConsumer.logger.Info("Interrupt is detected")
-				doneCh <- struct{}{}
+	for {
+		select {
+		case err = <-consumer.Errors():
+			kc.logger.Error(err.Error())
+
+		case msg := <-consumer.Messages():
+			var order model.Order
+			err := json.Unmarshal(msg.Value, &order)
+			if err != nil {
+				kc.logger.Error(err.Error())
 			}
+			err = kc.rs.AddOrder(&order)
+			if err != nil {
+				kc.logger.Error(err.Error())
+			}
+			kc.logger.Infof("Received message: | Topic(%s) | Message(%s) \n", msg.Topic, string(msg.Value))
 		}
-	}()
-
-	<-doneCh
-	kConsumer.logger.Infof("Processed %d msgCount", msgCount)
-
-	if err := kConsumer.Close(); err != nil {
-		kConsumer.logger.Panic(err.Error())
 	}
 }
