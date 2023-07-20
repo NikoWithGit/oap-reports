@@ -47,7 +47,7 @@ func main() {
 }
 
 func kafkaInitAndListen(rs iface.ReportService, logger iface.Ilogger) error {
-	consumer, consumerErr := consumer.NewKafkaConsumer([]string{"order-and-pay-kafka-1:9092"}, rs, logger)
+	consumer, consumerErr := consumer.NewKafkaConsumer([]string{"oap-reports-kafka-1:9092"}, rs, logger)
 	if consumerErr != nil {
 		return consumerErr
 	}

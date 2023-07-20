@@ -77,7 +77,7 @@ func (rri *ReportRepoImpl) getAllRaw(from time.Time, to time.Time) ([]model.Orde
 }
 
 func (rri *ReportRepoImpl) getProductsByOrderId(order_id string) ([]model.ProductInOrder, error) {
-	rows, err := rri.db.Query("SELECT uuid, num, price_per_one FROM products_in_orders")
+	rows, err := rri.db.Query("SELECT uuid, num, price_per_one FROM products_in_orders WHERE order_id = $1", order_id)
 	if err != nil {
 		return nil, err
 	}
